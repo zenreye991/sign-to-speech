@@ -1,10 +1,11 @@
-# Sign to Speech
+# Sign to speech, speech to captions
 
-Turning sign language into spoken words, so a deaf signer can be understood by someone who
-does not sign.
+A two-way bridge between a deaf signer and a hearing person who does not sign. One half watches
+someone sign and says the words out loud; the other listens to the reply and puts it on screen
+in large captions.
 
-**Track:** AI + Languages · **Team:** [Zen Rey, Artem, Kai Jian] · [International School ParkCity]
-**Demo video:** [LINK]
+**Track:** AI + Languages · **Team:** Zen Rey, Artem, Kai Jian · International School ParkCity
+**Demo video:** https://drive.google.com/file/d/1jdufwIJnZwm9_49IhE03wXSom_mSE1Rh/view?usp=sharing
 
 ---
 
@@ -21,15 +22,25 @@ realise the person in front of them does not sign.
 
 ## What we built
 
-A laptop program that watches someone sign through a webcam and says the word out loud.
+Two halves of one conversation, each runnable on an ordinary laptop.
 
-- **In:** live video of a person signing.
-- **Out:** the English word spoken through the speaker, plus a running sentence on screen.
-- **How it is used:** the signer signs, pausing briefly between signs. Each recognised sign is
-  spoken immediately. Pressing **S** speaks the whole sentence again for someone who missed it.
+**Signs to speech** (the Python scripts here, a model we trained). A webcam watches someone sign
+and the word is spoken aloud.
 
-It currently knows six signs in American Sign Language: **hello, yes, no, thanks, please** and
-**water**, plus a seventh class, `idle`, for when the person is not signing.
+- **In:** live video of a person signing. **Out:** the English word through the speaker, plus a
+  running sentence on screen.
+- The signer signs, pausing briefly between signs, and each recognised sign is spoken
+  immediately. Pressing **S** speaks the whole sentence again for someone who missed it.
+- It currently knows six signs in American Sign Language: **hello, yes, no, thanks, please** and
+  **water**, plus a seventh class, `idle`, for when the person is not signing.
+
+**Speech to captions** (`speech-to-text/`, built on a pretrained model). The hearing person
+replies out loud and their words appear as large on-screen text.
+
+- **In:** live microphone audio. **Out:** captions at 26px, a new line each time the speaker
+  pauses.
+- Audio is collected in half-second chunks. A pause of 0.8 seconds closes the current line and
+  starts the next, so captions read as sentences rather than a wall of text.
 
 ## What we added
 
@@ -68,6 +79,15 @@ pretrained MediaPipe Hand Landmarker; we did not train that part.
 four consecutive confident predictions of the same sign, and will not repeat a word until the
 signer pauses. In live testing this was enough on its own: we did not need to raise the
 confidence threshold above its default of 0.6.
+
+**The speech half.** OpenAI's Whisper (`small`) turns the reply into text. We did not train it;
+the work on this side is making a batch model behave like a live one. Microphone audio arrives
+in half-second chunks and the phrase being spoken is re-transcribed twice a second, so the
+caption updates while the person is still talking. We measure the loudness of each 0.1-second
+slice: if the last 0.8 seconds are below the silence threshold, the phrase is finished and the
+line is locked in; if someone talks for 15 seconds without pausing, everything but the last
+sentence is locked in and the rest carries over. Stretches of pure silence are thrown away
+rather than sent to Whisper, because it tends to invent words when given silence.
 
 ## Results
 
@@ -119,7 +139,12 @@ what the hello salute looks like. Adding them removed our false alarms, but it a
 model that a hand near the head means "not signing", and the second signer's hello falls into
 that gap. Fixing false alarms cost us a real sign for a person the model had not met.
 
-**What it cannot do.** It recognises single signs, not sign language. It has no grammar, no
+**The speech half is not measured.** We tested it by speaking into it and reading the captions,
+which worked, but we did not compute a word error rate against a labelled transcript. We are
+reporting that honestly rather than guessing a number. On a CPU the captions lag a few seconds
+behind the voice; on a GPU they keep up.
+
+**What it cannot do.** The sign half recognises single signs, not sign language. It has no grammar, no
 facial expression (a grammatical part of ASL), no fingerspelling, and it cannot follow fast
 continuous signing. It is a prototype, not an interpreter.
 
@@ -142,10 +167,12 @@ continuous signing. It is a prototype, not an interpreter.
 
 - [MediaPipe Hand Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker)
   (Google) — pretrained hand tracking model
+- [Whisper `small`](https://github.com/openai/whisper) (OpenAI) — pretrained speech recognition
+  model, used as-is for the captions half
 - [scikit-learn](https://scikit-learn.org/) — random forest, k-NN, baseline, metrics
-- [OpenCV](https://opencv.org/) — camera capture and display
-- NumPy, Matplotlib
-- Sign references: [WHICH ASL DICTIONARY OR VIDEOS YOU USED]
+- [Gradio](https://gradio.app/) — the captions interface
+- OpenCV, NumPy, SciPy, Matplotlib, ffmpeg
+- Sign references: (20+ Basic Sign Language Phrases for Beginners | ASL), (Learn How to Sign Water in ASL | LearnHowToSign.org)
 - Code written with the help of Claude (Anthropic)
 - Dataset: recorded by the team. No public dataset was used.
 
@@ -153,7 +180,13 @@ continuous signing. It is a prototype, not an interpreter.
 
 # Running it yourself
 
-## Set up (once)
+## The captions half
+
+Open `speech-to-text/speech_to_text.ipynb` in Google Colab and choose Runtime → Run all. For
+captions that keep up with the speaker, first set Runtime → Change runtime type → T4 GPU. The
+last cell prints a link to the live captions page.
+
+## The sign half: set up (once)
 
 1. Install Python from python.org. Any version from 3.9 to 3.14 works.
 2. In a terminal in this folder:
@@ -216,6 +249,7 @@ Sign at the camera, pausing between signs. **S** speaks the whole sentence, **C*
 | `live.py` | camera to speech |
 | `common.py` | hand tracking, features, smoothing, speech |
 | `data/` | our recorded clips (hand coordinates only) |
+| `speech-to-text/speech_to_text.ipynb` | live Whisper captions (Colab) |
 
 ## If something goes wrong
 
